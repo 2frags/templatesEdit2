@@ -14,15 +14,21 @@
  * @reportissues     https://github.com/64j/templatesEdit2
  * @documentation    Official docs https://github.com/64j/templatesEdit2
  * @author           http://wexar.ru/
- * @lastupdate       27/07/2017
- */
+ * 
+ **/
 
 global $_lang, $content, $docgrp, $which_editor, $replace_richtexteditor, $richtexteditorIds, $richtexteditorOptions;
 
 function strClean($str) {
 	return htmlspecialchars($str, ENT_QUOTES);
 }
-
+//--
+//require_once(MODX_BASE_PATH.'assets/tvs/multitv/includes/multitv.class.php');
+if (!function_exists('renderFormElement')) {
+    require_once(MODX_MANAGER_PATH . 'includes/tmplvars.commands.inc.php');
+    require_once(MODX_MANAGER_PATH . 'includes/tmplvars.inc.php');
+}
+//--
 function renderTypeImage($value, $tvid, $width) {
 	$src = $value ? MODX_SITE_URL . $value : '';
 	$out = '<script type="text/javascript">
@@ -40,7 +46,7 @@ function renderContentField($name, $data, $showTvImage) {
 	$field = '';
 	list($item_title, $item_description) = explode('||||', $data['field']['title']);
 	$fieldDescription = (!empty($item_description)) ? '<br><span class="comment">' . $item_description . '</span>' : '';
-	$hide = $data['field']['hide'] || $data['tv']['hide'] ? true : false;
+	$hide = $data['field']['hide'] || $data['tv']['hide']  ? true : false;
 	$roles = !empty($data['field']['roles']) ? $data['field']['roles'] : (!empty($data['tv']['roles']) ? $data['tv']['roles'] : '');
 
 	if($roles) {
@@ -53,8 +59,12 @@ function renderContentField($name, $data, $showTvImage) {
 	}
 
 	$row_style = $hide ? ' style="display:none;"' : '';
+	$row_style = $hide || $data['field']['hide'] || $data['tv']['hide'] ? ' style="display:none;"' : '';
 	$mx_can_pub = $modx->hasPermission('publish_document') ? '' : 'disabled="disabled" ';
+	
 	if(isset($data['tv'])) {
+		//$field .= '<h2>'.$name.'</h2>';
+		//.print_r($data['tv'], true)
 		$title = '<label for="tv' . $data['tv']['id'] . '" class="warning">' . $item_title . '</label>' . $fieldDescription;
 		$help = !empty($data['tv']['help']) ? '<i class="fa fa-question-circle" data-tooltip="' . stripcslashes($data['tv']['help']) . '"></i>' : '';
 		if(array_key_exists('tv' . $data['tv']['id'], $_POST)) {
@@ -66,6 +76,7 @@ function renderContentField($name, $data, $showTvImage) {
 		} else {
 			$tvPBV = $data['tv']['value'];
 		}
+		//$field .= '<h4>'.$data['tv']['id'].'-'.$data['tv']['value'].'-'.$tvPBV.'</h4>';
 		$item_title = $data['tv']['caption'];
 		$item_description = $data['tv']['description'];
 		$tvDescription = (!empty($item_description)) ? '<br><span class="comment">' . $item_description . '</span>' : '';
@@ -89,24 +100,131 @@ function renderContentField($name, $data, $showTvImage) {
 			</script>';
 		}
 	}
+	
 	if(isset($data['field'])) {
 		$title = '<label for="' . $name . '" class="warning">' . $item_title . '</label>' . $fieldDescription;
 		$help = !empty($data['field']['help']) ? '<i class="fa fa-question-circle" data-tooltip="' . stripcslashes($data['field']['help']) . '"></i>' : '';
 		switch($name) {
+			///------------------------------------------------------- custom TV for site_content
+			case "tv_seo":	
+			//case "_seo":
+				//print_r($data['field'], true).print_r($content, true);
+				$title = '<label for="' . $name . '" class="warning">' . $item_title . '</label>';
+				$help = !empty($data['field']['help']) ? '<i class="fa fa-question-circle" data-tooltip="' . stripcslashes($data['field']['help']) . '"></i>' : '';
+				if(array_key_exists('field' . $data['field']['id'], $_POST)) {
+					if($data['field']['type'] == 'listbox-multiple') {
+						$tvPBV = implode('||', $_POST['field' . $data['field']['id']]);
+					} else {
+						$tvPBV = $_POST['field' . $data['field']['id']];
+					}
+				} else {
+					$tvPBV = $data['field']['value'];
+				}
+				$tvDescription = (!empty($item_description)) ? '<br><span class="comment">' . $item_description . '</span>' : '';
+				$title = '<span class="warning">' . $item_title . '</span>' . $tvDescription;
+				$renderTV = '';
+				$no_tv = str_replace('tv_','_', $name);
+				if(strlen($content[$no_tv]) > 0){}else{$content[$no_tv]='[]';} // empty array for MultiTV script (prevent js parse JSON error)
+				
+				$field .= '<script>(function($){$(document).ready(function() { $("#'.$name.'").val($("#'.$no_tv.'").val());  }); console.log( $("#'.$no_tv.'").val() + " + " + $("#'.$name.'").val() + $("#'.$name.'").length );  })(jQuery);</script>';
+				$field .='<textarea style="width: 100%; /*display: none;*/ " onchange="documentDirty=true;" name="'.$no_tv.'" id="'.$no_tv.'" cols="" rows="" class="transformed">'.$content[$no_tv].'</textarea>';
+				
+				$field .= renderFormElement($data['field']['type'], $data['field']['id'], $data['field']['default_text'], $data['field']['elements'], $content[$no_tv], '', $data['field']) . $renderTV;	
+				$field .= '<script>(function($){$(document).ready(function() { $("#'.$name.'list input").trigger("change"); }); })(jQuery);</script>';
+                break;				
+			    //----------  image
+            case "image": 
+                // handles image fields using htmlarea image manager
+				global $_lang;
+				global $ResourceManagerLoaded;
+				if(isset($which_browser)){}else{ $which_browser = 'mcpuk';} //-----!!!
+				global $content, $use_editor, $which_editor;
+				if(!$ResourceManagerLoaded && !(($content['richtext'] == 1 || $modx->manager->action == 4) && $use_editor == 1 && $which_editor == 3)) {
+					$field .= "
+						<script type=\"text/javascript\">
+							/* <![CDATA[ */
+								var lastImageCtrl;
+								var lastFileCtrl;
+								function OpenServerBrowser(url, width, height ) {
+									var iLeft = (screen.width  - width) / 2 ;
+									var iTop  = (screen.height - height) / 2 ;
+
+									var sOptions = 'toolbar=no,status=no,resizable=yes,dependent=yes' ;
+									sOptions += ',width=' + width ;
+									sOptions += ',height=' + height ;
+									sOptions += ',left=' + iLeft ;
+									sOptions += ',top=' + iTop ;
+
+									var oWindow = window.open( url, 'FCKBrowseWindow', sOptions ) ;
+								}			
+								function BrowseServer(ctrl) {
+									lastImageCtrl = ctrl;
+									var w = screen.width * 0.5;
+									var h = screen.height * 0.5;
+									OpenServerBrowser('" . MODX_MANAGER_URL . "media/browser/{$which_browser}/browser.php?Type=images', w, h);
+								}
+								function BrowseFileServer(ctrl) {
+									lastFileCtrl = ctrl;
+									var w = screen.width * 0.5;
+									var h = screen.height * 0.5;
+									OpenServerBrowser('" . MODX_MANAGER_URL . "media/browser/{$which_browser}/browser.php?Type=files', w, h);
+								}
+								function SetUrlChange(el) {
+									if ('createEvent' in document) {
+										var evt = document.createEvent('HTMLEvents');
+										evt.initEvent('change', false, true);
+										el.dispatchEvent(evt);
+									} else {
+										el.fireEvent('onchange');
+									}
+								}
+								function SetUrl(url, width, height, alt) {
+									if(lastFileCtrl) {
+										var c = document.getElementById(lastFileCtrl);
+										if(c && c.value != url) {
+										    c.value = url;
+											SetUrlChange(c);
+										}
+										lastFileCtrl = '';
+									} else if(lastImageCtrl) {
+										var c = document.getElementById(lastImageCtrl);
+										if(c && c.value != url) {
+										    c.value = url;
+											SetUrlChange(c);
+										}
+										lastImageCtrl = '';
+									} else {
+										return;
+									}
+								}
+							/* ]]> */
+						</script>";
+					$ResourceManagerLoaded = true;
+				}
+				$field .= '<input type="text" id="'.$name.'" name="'.$name.'"  value="'.$content[$name].'" '.$field_style.' onchange="documentDirty=true;" /><input type="button" value="' .$_lang['insert']. '" onclick="BrowseServer(\''.$name.'\')" />';
+				$field .='<script type="text/javascript">				
+					var imageInput_'.$name.' = document.getElementById("'.$name.'");
+					imageInput_'.$name.'.addEventListener("change", function(e) {		renderTvImageCheck(this.id);	});
+				</script>';
+				$field .= '<div class="image_for_tv" style="width: 150px; height: 150px; line-height: 135px; padding: 5px; margin: .1rem .1rem 0 0; border: 1px #ccc solid; background-color: #fff; text-align: center;"><img id="image_for_'.$name.'" src="../'.$content[$name].'" onclick="BrowseServer('.$name.')" style="display: inline-block; vertical-align: middle; max-height: 100%; max-width: 100%; cursor: pointer;"></div>';
+				break;
+				// - - - - - - - - - - - - - 
+				
 			case 'weblink':
 				if($content['type'] == 'reference' || $_REQUEST['a'] == '72') {
-					$field .= '
-				<i id="llock" class="' . $_style["actions_chain"] . '" onclick="enableLinkSelection(!allowLinkSelection);"></i>
-				<input id="ta" class="form-control" name="ta" type="text" maxlength="255" value="' . (!empty($content['content']) ? stripslashes($content['content']) : "http://") . '" onChange="documentDirty=true;" />
-				';
+					$field .= '<i id="llock" class="' . $_style["actions_chain"] . '" onclick="enableLinkSelection(!allowLinkSelection);"></i><input id="ta" class="form-control" name="ta" type="text" maxlength="255" value="' . (!empty($content['content']) ? stripslashes($content['content']) : "http://") . '" onChange="documentDirty=true;" />';
 				}
 				break;
 			case 'introtext':
 				$field .= '<textarea id="introtext" class="form-control" name="introtext" rows="3" wrap="soft" onChange="documentDirty=true;">' . $modx->htmlspecialchars(stripslashes($content['introtext'])) . '</textarea>';
-				break;
-			case 'template':
-				$field .= '<select id="template" class="form-control" name="template" onChange="templateWarning();">
-			<option value="0">(blank)</option>';
+				break;			
+			case 'introtext_ru':
+			case 'introtext_ua':
+			case 'introtext_en':
+				$field .= '<textarea id="'.$name.'" class="form-control" name="'.$name.'" rows="3" wrap="soft" onChange="documentDirty=true;">' . $modx->htmlspecialchars(stripslashes($content[$name])) . '</textarea>';
+                break;
+            case 'template':
+				$field .= '<select id="template" class="form-control" name="template" onChange="templateWarning();"><option value="0">(blank)</option>';
 				$rs = $modx->db->select("t.templatename, t.id, c.category", $modx->getFullTableName('site_templates') . " AS t LEFT JOIN " . $modx->getFullTableName('categories') . " AS c ON t.category = c.id", '', 'c.category, t.templatename ASC');
 				$currentCategory = '';
 				while($row = $modx->db->getRow($rs)) {
@@ -200,16 +318,32 @@ function renderContentField($name, $data, $showTvImage) {
 					';
 				break;
 			case 'content':
+			case 'content_ru':
+			case 'content_ua':
+			case 'content_en':
 				if($content['type'] == 'document' || $_REQUEST['a'] == '4') {
-					$field .= '<textarea id="ta" class="form-control" name="ta" rows="20" wrap="soft" onChange="documentDirty=true;">' . $modx->htmlspecialchars($content['content']) . '</textarea>';
+					$field .= '<tr' . $row_style . '><td colspan="2">';
+					//$field .= '<textarea id="ta" class="form-control" name="ta" rows="20" wrap="soft" onChange="documentDirty=true;">' . $modx->htmlspecialchars($content['content']) . '</textarea>';
 					if(($content['richtext'] == 1 || $_REQUEST['a'] == '4') && $use_editor == 1) {
 						// Richtext-[*content*]
+						//----------
+						if($name == 'content'){$content_id = 'ta';}else{$content_id = $name;}
+						$field .= '<textarea id="'.$content_id.'" name="'.$content_id.'" cols="" rows="" style="width:100%; height: 400px;" onChange="documentDirty=true;">' . $modx->htmlspecialchars($content[$name]) . '</textarea>';
 						$richtexteditorIds = array();
 						$richtexteditorOptions = array();
-						$replace_richtexteditor = is_array($replace_richtexteditor) ? array_merge($replace_richtexteditor, array('ta')) : array('ta');
-						$richtexteditorIds[$which_editor] = is_array($richtexteditorIds[$which_editor]) ? array_merge($richtexteditorIds[$which_editor], array('ta')) : array('ta');
-						$richtexteditorOptions[$which_editor]['ta'] = '';
+						$replace_richtexteditor = is_array($replace_richtexteditor) ? array_merge($replace_richtexteditor, array($content_id)) : array($content_id);
+						$richtexteditorIds[$which_editor] = is_array($richtexteditorIds[$which_editor]) ? array_merge($richtexteditorIds[$which_editor], array($content_id)) : array($content_id);
+						$richtexteditorOptions[$which_editor][$content_id] = '';
+						//----------
+						//$richtexteditorIds = array();
+						//$richtexteditorOptions = array();
+						//$replace_richtexteditor = is_array($replace_richtexteditor) ? array_merge($replace_richtexteditor, array('ta')) : array('ta');
+						//$richtexteditorIds[$which_editor] = is_array($richtexteditorIds[$which_editor]) ? array_merge($richtexteditorIds[$which_editor], array('ta')) : array('ta');
+						//$richtexteditorOptions[$which_editor]['ta'] = '';
+					} else {
+						$field .= '<div style="width:100%"><textarea class="phptextarea" id="ta" name="ta" style="width:100%; height: 400px;" onchange="documentDirty=true;">' . $modx->htmlspecialchars($content['content']) . '</textarea></div>';
 					}
+					$field .= '</td></tr>';
 				}
 				break;
 			case 'published':
@@ -222,6 +356,8 @@ function renderContentField($name, $data, $showTvImage) {
 			case 'unpub_date':
 			case 'createdon':
 			case 'editedon':
+			case 'date_from':
+			case 'date_to':
 				$field .= '
 				<div class="input-group">
 					<input id="' . $name . '" class="form-control DatePicker" name="' . $name . '" value="' . ($content[$name] == "0" || !isset($content[$name]) ? '' : $modx->toDateFormat($content[$name])) . '" onBlur="documentDirty=true;" placeholder="' . $modx->config['datetime_format'] . ' HH:MM:SS" ' . $mx_can_pub . ' />
@@ -241,6 +377,10 @@ function renderContentField($name, $data, $showTvImage) {
 			case 'alias_visible':
 			case 'isfolder':
 			case 'hidemenu':
+			case 'slider':				
+				
+				$value = (!isset($content[$name]) || $content[$name] == 1) ? 1 : 0;
+					$checked = $value ? "checked" : '';
 				if($name == 'richtext') {
 					$value = $content[$name] == 0 && $_REQUEST['a'] == '27' ? 0 : 1;
 					$checked = $value ? "checked" : '';
@@ -325,16 +465,16 @@ function renderContentField($name, $data, $showTvImage) {
 				break;
 			default:
 				$field .= '
-				<input id="' . $name . '" class="form-control' . ($name == 'pagetitle' ? ' form-control-lg' : '') . '" name="' . $name . '" type="text" maxlength="255" value="' . $modx->htmlspecialchars(stripslashes($content[$name])) . '" onChange="documentDirty=true;" spellcheck="true" />';
+				<input id="' . $name . '" class="form-control' . ( strpos($name, 'agetitle') > 0 ? ' form-control-lg' : '') . '" name="' . $name . '" type="text" maxlength="255" value="' . $modx->htmlspecialchars(stripslashes($content[$name])) . '" onChange="documentDirty=true;" spellcheck="true" />';
 		}
 	}
 
 	$out = '';
 	if(!empty($field)) {
 		if($name == 'content' || $name == 'introtext') {
-			$out .= '<div class="row form-group"' . $row_style . '>';
+			$out .= '<div class="row form-row"' . $row_style . '>';
 			if(!empty($data['field']['title'])) {
-				$out .= '<div class="navbar navbar-editor">' . $title . $help;
+				$out .= '<div class="col-md-3 col-lg-2">' . $title . $help;
 				//				if($name == 'content') {
 				//					$out .= '
 				//						<label class="float-xs-right">' . $_lang['which_editor_title'] . '
@@ -355,7 +495,7 @@ function renderContentField($name, $data, $showTvImage) {
 				//				}
 				$out .= '</div>';
 			}
-			$out .= '<div class="container">';
+			$out .= '<div class="col-md-9 col-lg-10">';
 		} else {
 			$out .= '<div class="row form-row"' . $row_style . '>';
 			if(!empty($data['field']['title']) || !empty($data['tv']['caption'])) {
@@ -369,7 +509,6 @@ function renderContentField($name, $data, $showTvImage) {
 		$out .= '</div>';
 		$out .= '</div>';
 	}
-
 	return $out;
 }
 
@@ -384,270 +523,31 @@ if(isset($_REQUEST['newtemplate'])) {
 	}
 }
 
-$mutate_content_fields = array(
-	'General' => array(
-		'title' => $_lang['settings_general'],
-		'roles' => '',
-		'hide' => '',
-		'fields' => array(
-			'pagetitle' => array(
-				'field' => array(
-					'title' => $_lang['resource_title'],
-					'help' => $_lang['resource_title_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'longtitle' => array(
-				'field' => array(
-					'title' => $_lang['long_title'],
-					'help' => $_lang['resource_long_title_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'parent' => array(
-				'field' => array(
-					'title' => $_lang['resource_parent'],
-					'help' => $_lang['resource_parent_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'description' => array(
-				'field' => array(
-					'title' => $_lang['resource_description'],
-					'help' => $_lang['resource_description_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'weblink' => array(
-				'field' => array(
-					'title' => $_lang['weblink'],
-					'help' => $_lang['resource_weblink_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'template' => array(
-				'field' => array(
-					'title' => $_lang['page_data_template'],
-					'help' => $_lang['page_data_template_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			)
-		)
-	),
-	'Content' => array(
-		'title' => 'Описание',
-		'roles' => '',
-		'hide' => '',
-		'fields' => array(
-			'introtext' => array(
-				'field' => array(
-					'title' => $_lang['resource_summary'],
-					'help' => $_lang['resource_summary_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'content' => array(
-				'field' => array(
-					'title' => $_lang['resource_content'],
-					'help' => '',
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'richtext' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_richtext'],
-					'help' => $_lang['resource_opt_richtext_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			)
-		)
-	),
-	'Seo' => array(
-		'title' => 'SEO',
-		'roles' => '',
-		'hide' => '',
-		'fields' => array(
-			'alias' => array(
-				'field' => array(
-					'title' => $_lang['resource_alias'],
-					'help' => $_lang['resource_alias_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'menutitle' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_menu_title'],
-					'help' => $_lang['resource_opt_menu_title_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'link_attributes' => array(
-				'field' => array(
-					'title' => $_lang['link_attributes'],
-					'help' => strClean($_lang['link_attributes_help']),
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'menuindex' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_menu_index'],
-					'help' => $_lang['resource_opt_menu_index_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'hidemenu' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_show_menu'],
-					'help' => $_lang['resource_opt_show_menu_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			)
-		)
-	),
-	'Settings' => array(
-		'title' => $_lang['settings_page_settings'],
-		'roles' => '',
-		'hide' => '',
-		'fields' => array(
-			'published' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_published'],
-					'help' => $_lang['resource_opt_published_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'alias_visible' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_alvisibled'],
-					'help' => $_lang['resource_opt_alvisibled_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'isfolder' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_folder'],
-					'help' => $_lang['resource_opt_folder_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'donthit' => array(
-				'field' => array(
-					'title' => $_lang['track_visitors_title'],
-					'help' => $_lang['resource_opt_trackvisit_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'contentType' => array(
-				'field' => array(
-					'title' => $_lang['page_data_contentType'],
-					'help' => $_lang['page_data_contentType_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'type' => array(
-				'field' => array(
-					'title' => $_lang['resource_type'],
-					'help' => $_lang['resource_type_message'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'content_dispo' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_contentdispo'],
-					'help' => $_lang['resource_opt_contentdispo_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'pub_date' => array(
-				'field' => array(
-					'title' => $_lang['page_data_publishdate'],
-					'help' => $_lang['page_data_publishdate_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'unpub_date' => array(
-				'field' => array(
-					'title' => $_lang['page_data_unpublishdate'],
-					'help' => $_lang['page_data_unpublishdate_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'createdon' => array(
-				'field' => array(
-					'title' => $_lang["createdon"],
-					'help' => $_lang["createdon"],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'editedon' => array(
-				'field' => array(
-					'title' => $_lang["editedon"],
-					'help' => $_lang["editedon"],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'searchable' => array(
-				'field' => array(
-					'title' => $_lang['page_data_searchable'],
-					'help' => $_lang['page_data_searchable_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'cacheable' => array(
-				'field' => array(
-					'title' => $_lang['page_data_cacheable'],
-					'help' => $_lang['page_data_cacheable_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			),
-			'syncsite' => array(
-				'field' => array(
-					'title' => $_lang['resource_opt_emptycache'],
-					'help' => $_lang['resource_opt_emptycache_help'],
-					'roles' => '',
-					'hide' => ''
-				)
-			)
-		)
-	)
-);
 
 $render_template = $modx->runSnippet('mutate_content_template_' . $template);
 $render_template_default = $modx->runSnippet('mutate_content_template_default');
+
+
+if($render_template) {
+	$mutate_content_fields = $render_template;
+}
+if(!$render_template && $render_template_default) {
+	$mutate_content_fields = $render_template_default;
+}
+/*
 if(file_exists(MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_default.php')) {
 	include_once MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_default.php';
 }
-if(file_exists(MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_' . $template . '.php')) {
-	include_once MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_' . $template . '.php';
-}
+//=========================================================================== if SET config for 
 
+if(file_exists(MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_'.$template.'.php')) {
+	include_once MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_'.$template.'.php';
+}else{
+	if(file_exists(MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_default.php')) {
+		include_once MODX_BASE_PATH . 'assets/plugins/templatesedit/configs/template_default.php';
+	}
+}
+*/
 if($render_template) {
 	$mutate_content_fields = $render_template;
 } else if($render_template_default) {
