@@ -1,3 +1,10 @@
+/**
+ * mutate_content_template_default
+ *
+ * default fields
+ *
+ * @category    snippet
+ */
 <?php
 global $_lang;
 $mutate_content_fields = array(
