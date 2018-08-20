@@ -1,3 +1,10 @@
+/**
+ * mutate_content_template_3
+ *
+ *  fields for tpl #3
+ *
+ * @category    snippet
+ */
 <?php
 $mutate_content_fields = $modx->runSnippet('mutate_content_template_default');
 
