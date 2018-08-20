@@ -4,8 +4,8 @@
  * Events install, creates menu item for user module ClientSettings
  *
  * @category    plugin
- * @version     1.2.6
- * @author      mnoskov
+ * @version     0.1.1
+ * @author      64j, 2frags
  * @internal    @events OnDocFormTemplateRender
  * @internal    @modx_category Manager and Admin
  * @internal    @properties &showTvImage=Показывать картинки в TV;list;yes,no;yes &excludeTvCategory=Исключить TV из категорий;text;
